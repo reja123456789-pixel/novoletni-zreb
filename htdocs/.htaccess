@@ -1,0 +1,6 @@
+# Prepreči neposreden dostop do nastavitev in pomožnih datotek
+<FilesMatch "^(config|mailer)\.php$">
+    Require all denied
+</FilesMatch>
+
+DirectoryIndex index.html

@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Admin žreba</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header class="hero">
+    <div class="badge">🔐 Admin</div>
+    <h1>Nadzorna plošča</h1>
+  </header>
+
+  <!-- prijava -->
+  <section class="card" id="login-card">
+    <h2>🔑 Prijava</h2>
+    <form id="login-form" class="row">
+      <input type="password" id="password" placeholder="Admin geslo" autocomplete="current-password">
+      <button class="btn" type="submit">Vstopi</button>
+    </form>
+    <div class="msg error" id="login-msg"></div>
+  </section>
+
+  <div id="dash" class="hidden">
+    <!-- statistika -->
+    <section class="card">
+      <h2>📊 Prijave</h2>
+      <div class="stats">
+        <div class="stat"><b id="s-count">0</b>prijavljenih</div>
+        <div class="stat"><b id="s-days">—</b>dni do žreba</div>
+        <div class="stat"><b id="s-state">⏳</b><span id="s-state-label">žreb čaka</span></div>
+      </div>
+      <div class="grid2" style="margin-top:20px">
+        <div><h3 style="margin:0 0 10px">Velikosti</h3><div class="bars" id="by-size"></div></div>
+        <div><h3 style="margin:0 0 10px">Spol</h3><div class="bars" id="by-gender"></div></div>
+      </div>
+    </section>
+
+    <!-- žreb -->
+    <section class="card">
+      <h2>🎰 Žreb</h2>
+      <div id="draw-pending">
+        <p>Ko pritisneš gumb, vsak udeleženec dobi naključno drugo osebo (nihče ne dobi sebe). Prijave se zaprejo, vsakemu pa se samodejno pošlje mail s tem, koga oblači.</p>
+        <p id="draw-warn" class="msg"></p>
+        <button class="btn pink full" id="draw-btn">🎲 Izvedi žreb in pošlji maile</button>
+      </div>
+      <div id="draw-done" class="hidden">
+        <p>✅ Žreb izveden <b id="draw-at"></b>.</p>
+        <div class="stats" style="margin-bottom:16px">
+          <div class="stat"><b id="m-sent" style="color:#1a9e55">0</b>mailov poslanih</div>
+          <div class="stat"><b id="m-pending" style="color:#d18b00">0</b>čaka</div>
+          <div class="stat"><b id="m-error" style="color:#d1004f">0</b>neuspešnih</div>
+        </div>
+        <p id="send-progress" class="msg"></p>
+        <p style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn small" id="send-pending">📤 Pošlji čakajoče</button>
+          <button class="btn small" id="resend-errors">🔁 Ponovno pošlji neuspele</button>
+          <button class="btn cyan small" id="toggle-pairs">👀 Pokaži pare</button>
+        </p>
+        <p>Če tudi sam/a sodeluješ, si parov raje ne poglej. 😉</p>
+        <div class="table-wrap hidden" id="pairs-wrap" style="margin-top:16px">
+          <table><thead><tr><th>Oblači</th><th></th><th>Koga</th><th>Vel.</th><th>Spol</th></tr></thead><tbody id="pairs"></tbody></table>
+        </div>
+        <div style="margin-top:20px">
+          <button class="btn danger small" id="reset-btn">↩️ Ponastavi žreb</button>
+        </div>
+      </div>
+      <div class="msg error" id="draw-msg"></div>
+    </section>
+
+    <!-- seznam -->
+    <section class="card">
+      <h2>👯 Udeleženci</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Ime</th><th>Mail</th><th>Vel.</th><th>Spol</th><th>Opomba</th><th>Status</th><th></th></tr></thead>
+          <tbody id="people"></tbody>
+        </table>
+      </div>
+      <p id="empty" class="hidden">Še nihče se ni prijavil. Pošlji povezavo prijateljem! 📲</p>
+    </section>
+
+    <!-- nastavitve -->
+    <section class="card">
+      <h2>⚙️ Nastavitve</h2>
+      <form id="settings-form">
+        <label class="field" for="st-title">Naslov</label>
+        <input type="text" id="st-title" maxlength="80">
+        <div class="grid2">
+          <div>
+            <label class="field" for="st-draw">Datum žreba (rok za prijavo)</label>
+            <input type="datetime-local" id="st-draw">
+          </div>
+          <div>
+            <label class="field" for="st-party">Datum žurke</label>
+            <input type="datetime-local" id="st-party">
+          </div>
+        </div>
+        <button class="btn" type="submit">💾 Shrani</button>
+        <div class="msg" id="settings-msg"></div>
+      </form>
+    </section>
+
+    <!-- maili in podatki -->
+    <section class="card">
+      <h2>📬 Maili in podatki</h2>
+      <p>Pošiljatelj: <b id="mail-from"></b>. Preden odpreš prijave, preveri, ali pošiljanje deluje.</p>
+      <button class="btn cyan small" id="test-mail">🧪 Pošlji testni mail sebi</button>
+      <div class="msg" id="test-msg"></div>
+      <hr style="border:0;border-top:2px dashed #ccc;margin:22px 0">
+      <p>Po žurki izbriši vse prijave in maile udeležencev.</p>
+      <button class="btn danger small" id="wipe-btn">🗑️ Izbriši vse podatke</button>
+    </section>
+
+    <p style="text-align:center"><button class="btn small" id="logout">Odjava</button></p>
+  </div>
+
+  <footer><a href="index.html">← nazaj na prijavo</a></footer>
+</main>
+
+<script src="common.js"></script>
+<script>
+  spawnFloaters(10);
+  const $ = id => document.getElementById(id);
+  let data;
+  let sending = false;
+
+  const STATUS = {
+    '': '',
+    pending: '⏳ čaka',
+    sent: '✅ poslano',
+    error: '❌ napaka',
+  };
+
+  function bars(box, counts, cls, total) {
+    box.innerHTML = Object.entries(counts).map(([k, v]) => `
+      <div class="bar ${cls}">
+        <span>${esc(k)}</span>
+        <div class="track"><div class="fill" style="width:${total ? (v / total) * 100 : 0}%"></div></div>
+        <span>${v}</span>
+      </div>`).join('');
+  }
+
+  function render() {
+    const { stats, settings, participants, draw } = data;
+    $('s-count').textContent = stats.count;
+    const days = Math.ceil((new Date(settings.drawDate) - Date.now()) / 864e5);
+    $('s-days').textContent = isNaN(days) ? '—' : Math.max(0, days);
+    $('s-state').textContent = draw ? '✅' : '⏳';
+    $('s-state-label').textContent = draw ? 'žreb izveden' : 'žreb čaka';
+    bars($('by-size'), stats.bySize, '', stats.count);
+    bars($('by-gender'), stats.byGender, 'g', stats.count);
+
+    $('st-title').value = settings.title;
+    $('st-draw').value = settings.drawDate;
+    $('st-party').value = settings.partyDate;
+    $('mail-from').textContent = data.mailFrom;
+
+    $('draw-pending').classList.toggle('hidden', !!draw);
+    $('draw-done').classList.toggle('hidden', !draw);
+    if (draw) {
+      $('draw-at').textContent = fmtDate(draw.doneAt);
+      const count = s => participants.filter(p => p.mailStatus === s).length;
+      $('m-sent').textContent = count('sent');
+      $('m-pending').textContent = count('pending');
+      $('m-error').textContent = count('error');
+      $('pairs').innerHTML = draw.pairs.map(p => `
+        <tr><td><b>${esc(p.giver)}</b></td><td>➡️</td><td><b>${esc(p.receiver)}</b></td><td>${esc(p.size)}</td><td>${esc(p.gender)}</td></tr>`).join('');
+    } else {
+      const early = new Date(settings.drawDate) > Date.now();
+      $('draw-warn').textContent = participants.length < 3
+        ? '⚠️ Za žreb potrebuješ vsaj 3 udeležence.'
+        : early ? `ℹ️ Načrtovani datum žreba je ${fmtDate(settings.drawDate)} — žreb lahko izvedeš tudi prej.` : '🟢 Čas je za žreb!';
+      $('draw-btn').disabled = participants.length < 3;
+    }
+
+    $('empty').classList.toggle('hidden', participants.length > 0);
+    $('people').innerHTML = participants.map(p => `
+      <tr>
+        <td><b>${esc(p.name)}</b><div class="note">${esc(fmtDate(p.createdAt))}</div></td>
+        <td class="note">${esc(p.email)}</td>
+        <td>${esc(p.size)}</td>
+        <td>${GENDER_EMOJI[p.gender] || ''} ${esc(p.gender)}</td>
+        <td class="note">${esc(p.note || '')}</td>
+        <td class="note" title="${esc(p.mailError || '')}">${STATUS[p.mailStatus] || ''}${p.mailError ? '<br>' + esc(p.mailError.slice(0, 60)) : ''}</td>
+        <td>${draw
+          ? `<button class="btn small" data-resend="${esc(p.id)}" title="Pošlji mail ponovno">📤</button>`
+          : `<button class="btn danger small" data-remove="${esc(p.id)}" data-name="${esc(p.name)}">✕</button>`}</td>
+      </tr>`).join('');
+  }
+
+  async function load() {
+    try {
+      data = await api('overview');
+      $('login-card').classList.add('hidden');
+      $('dash').classList.remove('hidden');
+      render();
+    } catch (err) {
+      if (err.status !== 401) $('login-msg').textContent = err.message;
+      $('login-card').classList.remove('hidden');
+      $('dash').classList.add('hidden');
+    }
+  }
+
+  // Pošilja maile v manjših paketih, dokler ni vseh poslanih.
+  async function sendAll() {
+    if (sending) return;
+    sending = true;
+    let sent = 0, failed = 0;
+    try {
+      for (;;) {
+        $('send-progress').textContent = `📤 Pošiljam maile … (${sent} poslanih)`;
+        const r = await api('send_batch', {});
+        sent += r.sent;
+        failed += r.failed;
+        await load();
+        if (r.remaining <= 0 || r.sent + r.failed === 0) break;
+      }
+      $('send-progress').textContent = failed
+        ? `⚠️ Poslanih ${sent}, neuspešnih ${failed}. Napako vidiš pri udeležencu — poskusi ponovno.`
+        : `✅ Poslanih ${sent} mailov.`;
+    } catch (err) {
+      $('send-progress').textContent = '❌ ' + err.message;
+    }
+    sending = false;
+  }
+
+  $('login-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    $('login-msg').textContent = '';
+    try {
+      await api('login', { password: $('password').value });
+      $('password').value = '';
+      load();
+    } catch (err) {
+      $('login-msg').textContent = err.message;
+    }
+  });
+
+  $('logout').addEventListener('click', async () => {
+    await api('logout', {});
+    load();
+  });
+
+  $('draw-btn').addEventListener('click', async () => {
+    if (!confirm(`Izvedem žreb za ${data.participants.length} udeležencev? Prijave se bodo zaprle in vsem bo poslan mail.`)) return;
+    $('draw-msg').textContent = '';
+    try {
+      await api('draw', {});
+      confetti(200);
+      await load();
+      sendAll();
+    } catch (err) { $('draw-msg').textContent = err.message; }
+  });
+
+  $('send-pending').addEventListener('click', sendAll);
+
+  $('resend-errors').addEventListener('click', async () => {
+    await api('resend', {});
+    await load();
+    sendAll();
+  });
+
+  $('reset-btn').addEventListener('click', async () => {
+    if (!confirm('Res ponastavim žreb? Pari bodo izbrisani in prijave se ponovno odprejo. Že poslanih mailov ni mogoče preklicati!')) return;
+    await api('reset_draw', {});
+    $('pairs-wrap').classList.add('hidden');
+    $('send-progress').textContent = '';
+    load();
+  });
+
+  $('toggle-pairs').addEventListener('click', () => {
+    const w = $('pairs-wrap');
+    w.classList.toggle('hidden');
+    $('toggle-pairs').textContent = w.classList.contains('hidden') ? '👀 Pokaži pare' : '🙈 Skrij pare';
+  });
+
+  $('settings-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+      await api('settings', {
+        title: $('st-title').value,
+        drawDate: $('st-draw').value,
+        partyDate: $('st-party').value,
+      });
+      $('settings-msg').textContent = '✅ Shranjeno';
+      setTimeout(() => ($('settings-msg').textContent = ''), 2000);
+      load();
+    } catch (err) { $('settings-msg').textContent = err.message; }
+  });
+
+  $('test-mail').addEventListener('click', async () => {
+    $('test-msg').textContent = '⏳ Pošiljam …';
+    try {
+      const r = await api('test_mail', {});
+      $('test-msg').textContent = `✅ Poslano na ${r.to}. Preveri nabiralnik.`;
+    } catch (err) {
+      $('test-msg').textContent = '❌ ' + err.message;
+    }
+  });
+
+  $('wipe-btn').addEventListener('click', async () => {
+    if (!confirm('Izbrišem VSE prijave, pare in nastavitve? Tega ni mogoče razveljaviti.')) return;
+    if (!confirm('Res? Zadnja priložnost. 😬')) return;
+    await api('wipe', {});
+    load();
+  });
+
+  $('people').addEventListener('click', async e => {
+    const rm = e.target.closest('[data-remove]');
+    const rs = e.target.closest('[data-resend]');
+    try {
+      if (rm && confirm(`Odstranim ${rm.dataset.name}?`)) {
+        await api('remove', { id: rm.dataset.remove });
+        load();
+      }
+      if (rs) {
+        await api('resend', { id: rs.dataset.resend });
+        await load();
+        sendAll();
+      }
+    } catch (err) { alert(err.message); }
+  });
+
+  load();
+</script>
+</body>
+</html>

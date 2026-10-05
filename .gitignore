@@ -1,0 +1,7 @@
+﻿# Gesla in nastavitve - nikoli v git
+htdocs/config.php
+
+# Lokalni podatki in orodja
+*.sqlite
+data/
+.claude/

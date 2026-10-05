@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Novoletni modni žreb</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👗</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header class="hero">
+    <div class="badge">🎆 Silvestrovo 2026 🎆</div>
+    <h1 id="title">Novoletni modni žreb</h1>
+    <p>Prijavi se, žreb ti dodeli nekoga, ki ga boš oblekel/a za žurko. In nekdo drug bo oblekel tebe. 😈</p>
+
+    <div class="countdown" id="countdown" aria-live="polite">
+      <div><b id="cd-d">0</b><small>dni</small></div>
+      <div><b id="cd-h">0</b><small>ur</small></div>
+      <div><b id="cd-m">0</b><small>min</small></div>
+      <div><b id="cd-s">0</b><small>sek</small></div>
+    </div>
+    <div class="count-label" id="count-label">Do žreba …</div>
+  </header>
+
+  <section class="card">
+    <h2><span class="emoji">🎲</span> Kako deluje?</h2>
+    <div class="steps">
+      <div><span class="big">✍️</span>Vpiši ime, mail, velikost in spol</div>
+      <div><span class="big">📬</span>Na dan žreba ti pride mail, koga oblačiš</div>
+      <div><span class="big">🛍️</span>Izberi mu outfit in ga prinesi na žurko</div>
+    </div>
+  </section>
+
+  <section class="card" id="register-card">
+    <h2><span class="emoji">📝</span> Prijava</h2>
+
+    <form id="register-form" novalidate>
+      <label class="field" for="name">Tvoje ime</label>
+      <input type="text" id="name" name="name" maxlength="40" placeholder="npr. Ana K." autocomplete="name" required>
+
+      <label class="field" for="email">E-mail <small>(sem ti pošljemo rezultat žreba)</small></label>
+      <input type="email" id="email" name="email" maxlength="120" placeholder="ana@gmail.com" autocomplete="email" required>
+
+      <label class="field">Velikost oblačil</label>
+      <div class="chips" id="sizes"></div>
+
+      <label class="field">Spol</label>
+      <div class="chips gender" id="genders"></div>
+
+      <label class="field" for="note">Opomba za tistega, ki te oblači <small>(neobvezno)</small></label>
+      <textarea id="note" name="note" maxlength="140" placeholder="npr. številka čevljev 42, alergija na volno, sovražim rumeno 🙃"></textarea>
+
+      <button class="btn pink full" type="submit">Vrzi me v žreb! 🎉</button>
+      <div class="msg error" id="register-msg"></div>
+    </form>
+
+    <div id="registered" class="hidden">
+      <p style="font-size:1.2rem;margin:0">Super, <b id="reg-name"></b>, si v žrebu! 🥳</p>
+      <div class="code-box">
+        <div>Tvoja skrivna koda — <b>shrani jo!</b></div>
+        <div class="code" id="reg-code"></div>
+        <button class="btn cyan small" id="copy-code" type="button">📋 Kopiraj</button>
+      </div>
+      <p id="mail-note"></p>
+      <p>Po žrebu ti pošljemo mail, koga oblačiš. Za vsak primer lahko s to kodo rezultat preveriš tudi spodaj. Koda je shranjena tudi v tem brskalniku.</p>
+    </div>
+
+    <div id="closed" class="hidden">
+      <p style="font-size:1.2rem;margin:0">🔒 Žreb je že bil izveden, prijave so zaprte.</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2><span class="emoji">🔍</span> Koga oblačim?</h2>
+    <form class="row" id="result-form">
+      <input type="text" id="code" placeholder="Tvoja koda, npr. K7M-2QX" autocomplete="off" style="text-transform:uppercase">
+      <button class="btn" type="submit">Preveri</button>
+    </form>
+    <div class="msg error" id="result-msg"></div>
+    <div id="result" class="result hidden"></div>
+  </section>
+
+  <footer>
+    <p>🎆 Se vidimo <span id="party-date"></span> 🎆</p>
+    <p><a href="admin.html">admin</a></p>
+  </footer>
+</main>
+
+<script src="common.js"></script>
+<script>
+  spawnFloaters();
+
+  const $ = id => document.getElementById(id);
+  let status;
+  let timer;
+
+  function store(key, val) {
+    try { localStorage.setItem(key, val); } catch {}
+  }
+  function read(key) {
+    try { return localStorage.getItem(key); } catch { return null; }
+  }
+
+  function chips(box, name, values) {
+    box.innerHTML = values.map((v, i) => `
+      <input type="radio" name="${name}" id="${name}-${i}" value="${esc(v)}">
+      <label for="${name}-${i}">${name === 'gender' ? GENDER_EMOJI[v] + ' ' : ''}${esc(v)}</label>`).join('');
+  }
+
+  function tick() {
+    const target = new Date(status.settings.drawDate).getTime();
+    let diff = Math.max(0, target - Date.now());
+    const d = Math.floor(diff / 864e5); diff -= d * 864e5;
+    const h = Math.floor(diff / 36e5); diff -= h * 36e5;
+    const m = Math.floor(diff / 6e4); diff -= m * 6e4;
+    const s = Math.floor(diff / 1e3);
+    $('cd-d').textContent = d; $('cd-h').textContent = h;
+    $('cd-m').textContent = m; $('cd-s').textContent = s;
+  }
+
+  function renderStatus() {
+    $('title').textContent = status.settings.title;
+    document.title = status.settings.title;
+    $('party-date').textContent = fmtDate(status.settings.partyDate);
+    const n = status.count;
+    const r = n % 100;
+    const ppl = r === 1 ? 'oseba' : r === 2 ? 'osebi' : r === 3 || r === 4 ? 'osebe' : 'oseb';
+    if (status.drawDone) {
+      $('countdown').classList.add('hidden');
+      $('count-label').innerHTML = `🎰 Žreb je izveden! Sodelovalo je <b>${n}</b> ${ppl}. Preveri spodaj, koga oblačiš.`;
+      $('register-form').classList.add('hidden');
+      if ($('registered').classList.contains('hidden')) $('closed').classList.remove('hidden');
+    } else {
+      $('count-label').innerHTML = `Do žreba (${fmtDate(status.settings.drawDate)}) · prijavljenih: <b>${n}</b> ${ppl}`;
+      clearInterval(timer);
+      tick();
+      timer = setInterval(tick, 1000);
+    }
+  }
+
+  async function init() {
+    status = await api('status');
+    chips($('sizes'), 'size', status.sizes);
+    chips($('genders'), 'gender', status.genders);
+    renderStatus();
+
+    const saved = read('zreb-code');
+    if (saved) {
+      $('code').value = saved;
+      showRegistered(read('zreb-name') || '', saved);
+    }
+  }
+
+  function showRegistered(name, code) {
+    $('register-form').classList.add('hidden');
+    $('closed').classList.add('hidden');
+    $('registered').classList.remove('hidden');
+    $('reg-name').textContent = name;
+    $('reg-code').textContent = code;
+  }
+
+  $('register-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const f = e.target;
+    $('register-msg').textContent = '';
+    try {
+      const r = await api('register', {
+        name: $('name').value,
+        email: $('email').value,
+        size: f.elements.size.value,
+        gender: f.elements.gender.value,
+        note: $('note').value,
+      });
+      store('zreb-code', r.code);
+      store('zreb-name', r.name);
+      $('code').value = r.code;
+      showRegistered(r.name, r.code);
+      $('mail-note').innerHTML = r.mailSent
+        ? '📬 Potrditev s kodo smo ti poslali na mail (preveri tudi vsiljeno pošto).'
+        : '⚠️ Potrditvenega maila nismo mogli poslati — <b>kodo si zapiši</b>. Prijava je vseeno shranjena.';
+      confetti();
+      status.count++;
+      renderStatus();
+    } catch (err) {
+      $('register-msg').textContent = err.message;
+    }
+  });
+
+  $('copy-code').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText($('reg-code').textContent);
+      $('copy-code').textContent = '✅ Kopirano';
+    } catch {
+      $('copy-code').textContent = 'Označi in kopiraj ročno';
+    }
+  });
+
+  $('result-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    $('result-msg').textContent = '';
+    $('result').classList.add('hidden');
+    try {
+      const r = await api('result', { code: $('code').value });
+      const box = $('result');
+      if (!r.drawDone) {
+        box.innerHTML = `<p style="font-size:1.2rem;margin:0">Živjo <b>${esc(r.name)}</b>! ⏳<br>Žreb še ni bil izveden. Vrni se po <b>${esc(fmtDate(r.drawDate))}</b>.</p>`;
+      } else {
+        const t = r.target;
+        box.innerHTML = `
+          <div>${esc(r.name)}, ti oblačiš …</div>
+          <div class="target">${esc(t.name)}</div>
+          <span class="pill">👕 ${esc(t.size)}</span>
+          <span class="pill">${GENDER_EMOJI[t.gender] || ''} ${esc(t.gender)}</span>
+          ${t.note ? `<p style="margin-top:14px">💬 „${esc(t.note)}”</p>` : ''}
+          <p style="margin-top:14px">🤫 Psst — ne povej nikomur!</p>`;
+        confetti(80);
+      }
+      box.classList.remove('hidden');
+    } catch (err) {
+      $('result-msg').textContent = err.message;
+    }
+  });
+
+  init().catch(err => { $('count-label').textContent = 'Strežnik ni dosegljiv: ' + err.message; });
+</script>
+</body>
+</html>
