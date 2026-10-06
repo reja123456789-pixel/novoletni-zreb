@@ -50,11 +50,15 @@ Vse, kar se naloži na strežnik, je v mapi **`htdocs/`** (PHP + MySQL, brez dod
 4. Rezultat je s kodo vedno viden tudi na prvi strani — za primer, da mail ne pride.
 5. Po žurki v adminu klikni **Izbriši vse podatke**.
 
-## 👃 Mini igra: Spopad z nosom
+## 🎮 Nagradna igra: Glava Hero
 
-Samostojna igra v [`minigame/index.html`](minigame/index.html) — odpri v brskalniku.
-Izberi Zrezka ali Korenčka in premagaj velikanski nos Nosferatu.
-Za vključitev v stran jo skopiraj v `htdocs/` (npr. `igra.html`) in dodaj povezavo.
+Ritmična igra na `/igra/` (gumb »NAGRADNA IGRA« na prijavni strani).
+Pred vsako igro igralec vpiše ime, rezultat gre na skupno lestvico (najboljši rezultat vsakega imena).
+Lestvico vidiš v igri in v adminu, kjer jo lahko tudi počistiš.
+
+- Igra: `htdocs/igra/index.html`, pesem: `htdocs/igra/autotune.mp3` (ni v gitu, naloži jo ročno).
+- Testna verzija brez pesmi in strežnika (ena datoteka za pošiljanje): `node dev/make-test.js`
+  ustvari `minigame/glava-hero-test.html`.
 
 ## Opombe
 

@@ -6,7 +6,9 @@ date_default_timezone_set('Europe/Ljubljana');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
-$cfg = require __DIR__ . '/config.php';
+// Lokalno (dev/config.local.php izven htdocs) uporabi SQLite in lažni SMTP, sicer config.php.
+$localCfg = __DIR__ . '/../dev/config.local.php';
+$cfg = require (@is_file($localCfg) ? $localCfg : __DIR__ . '/config.php');
 require __DIR__ . '/mailer.php';
 
 const SIZES = ['S', 'M', 'L', 'XL', 'XXL'];
@@ -51,7 +53,37 @@ function db(): PDO
         mail_error VARCHAR(255) NOT NULL DEFAULT ''
     )$charset");
     $pdo->exec("CREATE TABLE IF NOT EXISTS settings (k VARCHAR(32) PRIMARY KEY, v TEXT NOT NULL)$charset");
+    // lestvica nagradne igre (Glava Hero) — samo ime in rezultat, brez uporabniških računov
+    $pdo->exec("CREATE TABLE IF NOT EXISTS scores (
+        id VARCHAR(32) PRIMARY KEY,
+        name VARCHAR(20) NOT NULL,
+        score INT NOT NULL,
+        level INT NOT NULL,
+        hits INT NOT NULL,
+        total INT NOT NULL,
+        max_streak INT NOT NULL,
+        created_at VARCHAR(30) NOT NULL
+    )$charset");
     return $pdo;
+}
+
+// najboljši rezultat vsakega imena, razvrščeno
+function leaderboard(int $limit = 20): array
+{
+    $rows = db()->query('SELECT name, score, level, hits, total, max_streak, created_at FROM scores ORDER BY score DESC, created_at ASC LIMIT 500')->fetchAll();
+    $seen = [];
+    $out = [];
+    foreach ($rows as $r) {
+        $key = mb_strtolower($r['name']);
+        if (isset($seen[$key])) continue;
+        $seen[$key] = true;
+        $out[] = [
+            'name' => $r['name'], 'score' => (int) $r['score'], 'level' => (int) $r['level'],
+            'acc' => $r['total'] > 0 ? round($r['hits'] / $r['total'] * 100) : 0, 'streak' => (int) $r['max_streak'],
+        ];
+        if (count($out) >= $limit) break;
+    }
+    return $out;
 }
 
 function settings(): array
@@ -185,7 +217,42 @@ try {
         ]);
     }
 
-    if (!$isPost) fail('Neznana zahteva.', 404);
+    // vse razen branja (status, overview) mora biti POST
+    if ($a === 'leaderboard') {
+        out(['top' => leaderboard(20)]);
+    }
+
+    // vse razen branja (status, leaderboard, overview) mora biti POST
+    if (!$isPost && $a !== 'overview') fail('Neznana zahteva.', 404);
+
+    if ($a === 'score') {
+        $name = mb_substr(trim(preg_replace('/\s+/u', ' ', (string) ($in['name'] ?? ''))), 0, 20);
+        $score = (int) ($in['score'] ?? -1);
+        $level = (int) ($in['level'] ?? 0);
+        $hits = (int) ($in['hits'] ?? -1);
+        $total = (int) ($in['total'] ?? -1);
+        $streak = (int) ($in['maxStreak'] ?? -1);
+        if (mb_strlen($name) < 2) fail('Vpiši ime (vsaj 2 znaka).');
+        // osnovno preverjanje smiselnosti (igra je na zabavi, ne na olimpijadi)
+        if ($total < 1 || $total > 2000 || $hits < 0 || $hits > $total || $streak < 0 || $streak > $hits) fail('Neveljaven rezultat.');
+        if ($score < 0 || $score > $total * 700 || $level < 1 || $level > 5) fail('Neveljaven rezultat.');
+        $last = $_SESSION['lastScoreAt'] ?? 0;
+        if (time() - $last < 30) fail('Prehitro! Počakaj malo pred naslednjim rezultatom.', 429);
+        $_SESSION['lastScoreAt'] = time();
+
+        db()->prepare('INSERT INTO scores (id, name, score, level, hits, total, max_streak, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+            ->execute([bin2hex(random_bytes(16)), $name, $score, $level, $hits, $total, $streak, date('c')]);
+
+        $st = db()->prepare('SELECT MAX(score) FROM scores WHERE LOWER(name) = LOWER(?)');
+        $st->execute([$name]);
+        $personalBest = (int) $st->fetchColumn();
+        $top = leaderboard(500);
+        $rank = 0;
+        foreach ($top as $i => $r) {
+            if (mb_strtolower($r['name']) === mb_strtolower($name)) { $rank = $i + 1; break; }
+        }
+        out(['rank' => $rank, 'personalBest' => $personalBest, 'isBest' => $personalBest === $score, 'top' => array_slice($top, 0, 20)]);
+    }
 
     if ($a === 'register') {
         $s = settings();
@@ -285,8 +352,15 @@ try {
                 'mailStatus' => $p['mail_status'], 'mailError' => $p['mail_error'],
             ], $people),
             'draw' => $s['drawDoneAt'] !== '' ? ['doneAt' => $s['drawDoneAt'], 'pairs' => $pairs] : null,
-            'mailFrom' => $cfg['mail']['user'],
+            'mailFrom' => $cfg['mail']['user'] ?: ($cfg['mail']['from'] ?? ''),
+            'leaderboard' => leaderboard(20),
+            'scoreCount' => (int) db()->query('SELECT COUNT(*) FROM scores')->fetchColumn(),
         ]);
+    }
+
+    if ($a === 'reset_scores') {
+        db()->exec('DELETE FROM scores');
+        out(['ok' => true]);
     }
 
     if ($a === 'settings') {
@@ -349,7 +423,7 @@ try {
     }
 
     if ($a === 'test_mail') {
-        $to = $cfg['mail']['user'];
+        $to = $cfg['mail']['user'] ?: ($cfg['mail']['from'] ?? '');
         $smtp = new Smtp($cfg['mail']);
         $smtp->send($to, '🧪 Testni mail — ' . settings()['title'],
             mailLayout('Testni mail', '<p style="font-size:16px">Če to bereš, pošiljanje mailov deluje. 🎉</p>'));
@@ -372,6 +446,7 @@ try {
     if ($a === 'wipe') {
         db()->exec('DELETE FROM participants');
         db()->exec('DELETE FROM settings');
+        db()->exec('DELETE FROM scores');
         out(['ok' => true]);
     }
 

@@ -107,6 +107,23 @@
       </form>
     </section>
 
+    <!-- nagradna igra -->
+    <section class="card">
+      <h2>🎮 Nagradna igra — lestvica</h2>
+      <p id="score-count"></p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Ime</th><th>Točke</th><th>Nivo</th><th>Zadetih</th></tr></thead>
+          <tbody id="board"></tbody>
+        </table>
+      </div>
+      <p id="board-empty" class="hidden">Še nihče ni igral. <a href="igra/">Preizkusi igro →</a></p>
+      <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+        <a class="btn small" href="igra/" style="text-decoration:none">▶ Odpri igro</a>
+        <button class="btn danger small" id="reset-scores">🗑️ Počisti lestvico</button>
+      </div>
+    </section>
+
     <!-- maili in podatki -->
     <section class="card">
       <h2>📬 Maili in podatki</h2>
@@ -179,6 +196,18 @@
         : early ? `ℹ️ Načrtovani datum žreba je ${fmtDate(settings.drawDate)} — žreb lahko izvedeš tudi prej.` : '🟢 Čas je za žreb!';
       $('draw-btn').disabled = participants.length < 3;
     }
+
+    const lb = data.leaderboard || [];
+    $('score-count').textContent = `Odigranih iger: ${data.scoreCount || 0} · na lestvici je najboljši rezultat vsakega imena.`;
+    $('board-empty').classList.toggle('hidden', lb.length > 0);
+    $('board').innerHTML = lb.map((r, i) => `
+      <tr>
+        <td>${['🥇', '🥈', '🥉'][i] || i + 1 + '.'}</td>
+        <td><b>${esc(r.name)}</b></td>
+        <td>${Number(r.score).toLocaleString('sl-SI')}</td>
+        <td>${r.level}</td>
+        <td>${r.acc} %</td>
+      </tr>`).join('');
 
     $('empty').classList.toggle('hidden', participants.length > 0);
     $('people').innerHTML = participants.map(p => `
@@ -305,8 +334,14 @@
     }
   });
 
+  $('reset-scores').addEventListener('click', async () => {
+    if (!confirm('Počistim celotno lestvico nagradne igre?')) return;
+    await api('reset_scores', {});
+    load();
+  });
+
   $('wipe-btn').addEventListener('click', async () => {
-    if (!confirm('Izbrišem VSE prijave, pare in nastavitve? Tega ni mogoče razveljaviti.')) return;
+    if (!confirm('Izbrišem VSE prijave, pare, nastavitve in lestvico igre? Tega ni mogoče razveljaviti.')) return;
     if (!confirm('Res? Zadnja priložnost. 😬')) return;
     await api('wipe', {});
     load();

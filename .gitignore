@@ -5,3 +5,8 @@ htdocs/config.php
 *.sqlite
 data/
 .claude/
+dev/zreb.sqlite
+dev/mails/
+
+# Pesem za igro (avtorsko zaščitena, 6,7 MB) — na InfinityFree jo naloži ročno
+htdocs/igra/autotune.mp3
