@@ -1763,6 +1763,10 @@ function drawTitle() {
     txt('← ŽREB', 73, 35, 14, '#fff');
     uiButtons.push({ x: 4, y: 4, w: 138, h: 60, action: () => { location.href = '../'; } });
   }
+  // brskalniki ne dovolijo zvoka pred prvim dotikom
+  if ((!AC || AC.state !== 'running') && frame % 70 < 50) {
+    txt(IS_TOUCH ? '🔊 Tapni za glasbo' : '🔊 Klikni za glasbo', L.CX, infoY + 30, 13, '#ffd23f');
+  }
   txt(IS_TOUCH ? 'Tapkaj levo / sredina / desno · drži za dolge črte'
     : 'Tipke A S D (ali ← ↓ →) · drži za dolge črte · ESC pavza · M zvok',
     L.CX, H - (P ? 24 : 12), 12, 'rgba(255,255,255,.7)');
@@ -1835,6 +1839,102 @@ function drawMute() {
   rr(x, y, 44, 44, 12); ctx.fillStyle = 'rgba(27,16,54,.6)'; ctx.fill();
   txt(muted ? '🔇' : '🔊', x + 22, y + 23, 20, '#fff');
   uiButtons.push({ x, y, w: 44, h: 44, action: () => setMuted(!muted) });
+}
+
+// ---------------------------------------------------------------- glasba v meniju: retro trance (sintetizirana)
+
+const MENU_STATES = ['title', 'name', 'board', 'results'];
+const MT = { bpm: 138, bus: null, next: 0, step: 0 };
+const MT_CHORDS = [ // Am  F  C  G — koren (bas) + akord
+  { root: 45, ch: [57, 60, 64] },
+  { root: 41, ch: [57, 60, 65] },
+  { root: 48, ch: [55, 60, 64] },
+  { root: 43, ch: [55, 59, 62] },
+];
+const ARP = [0, 1, 2, 3, 2, 1, 0, 2, 1, 3, 2, 0, 3, 2, 1, 2]; // vzorec arpeggia po 16-inkah
+
+function mtTone(at, f, d, type, vol, filter = 0, detune = 0) {
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = f; o.detune.value = detune;
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.linearRampToValueAtTime(vol, at + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + d);
+  let node = o;
+  if (filter) {
+    const lp = AC.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = filter; lp.Q.value = 6;
+    o.connect(lp); node = lp;
+  }
+  node.connect(g).connect(MT.bus);
+  o.start(at); o.stop(at + d + 0.05);
+}
+function mtNoise(at, d, vol, type, freq) {
+  const s = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+  s.buffer = noiseBuf; f.type = type; f.frequency.value = freq;
+  g.gain.setValueAtTime(vol, at);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + d);
+  s.connect(f).connect(g).connect(MT.bus);
+  s.start(at, Math.random() * 0.5, d + 0.05);
+}
+
+function menuStep(at, step) {
+  const s = step % 16, bar = Math.floor(step / 16), phrase = bar % 8, c = MT_CHORDS[bar % 4];
+  const sixteenth = 60 / MT.bpm / 4;
+  const build = phrase === 7; // zadnji takt fraze: stopnjevanje
+  // bobni
+  if (s % 4 === 0 && !(build && s >= 12)) {
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.frequency.setValueAtTime(160, at);
+    o.frequency.exponentialRampToValueAtTime(42, at + 0.12);
+    g.gain.setValueAtTime(0.75, at);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.22);
+    o.connect(g).connect(MT.bus);
+    o.start(at); o.stop(at + 0.25);
+  }
+  if (s === 4 || s === 12) mtNoise(at, 0.16, 0.22, 'bandpass', 1500);           // ploskanje
+  if (s % 4 === 2) mtNoise(at, 0.09, 0.08, 'highpass', 7000);                   // odprt hi-hat
+  else mtNoise(at, 0.03, 0.03, 'highpass', 9000);                               // zaprt hi-hat
+  if (build) mtNoise(at, 0.08, 0.04 + s * 0.012, 'bandpass', 1800 + s * 120);   // snare roll
+  if (s === 0 && phrase === 0) mtNoise(at, 1.6, 0.14, 'highpass', 5000);        // crash
+  // valoviti bas (vse razen udarcev bobna)
+  if (s % 4 !== 0) mtTone(at, mtof(c.root), sixteenth * 0.9, 'sawtooth', 0.09, 420 + (s % 4) * 90);
+  // "supersaw" arpeggio: trije razglašeni žagasti toni, filter se počasi odpira
+  const sweep = 900 + 2600 * (0.5 + 0.5 * Math.sin(step / 64 * Math.PI));
+  const notes = [...c.ch, c.ch[0] + 12];
+  const f = mtof(notes[ARP[s]] + 12);
+  for (const dt of [-12, 0, 12]) mtTone(at, f, sixteenth * 1.6, 'sawtooth', 0.022, sweep, dt);
+  // retro čip "pluck" na vsako četrtinko
+  if (s % 4 === 0) mtTone(at, f * 2, 0.08, 'square', 0.02);
+  // pad na začetku takta
+  if (s === 0) for (const n of c.ch) mtTone(at, mtof(n), sixteenth * 16, 'triangle', 0.035);
+}
+
+function menuMusicTick() {
+  if (!AC || AC.state !== 'running') return;
+  if (!MT.bus) {
+    MT.bus = AC.createGain();
+    MT.bus.gain.setValueAtTime(0.0001, AC.currentTime);
+    MT.bus.gain.linearRampToValueAtTime(0.7, AC.currentTime + 1.2);
+    MT.bus.connect(master);
+    MT.next = AC.currentTime + 0.1;
+    MT.step = 0;
+  }
+  const sixteenth = 60 / MT.bpm / 4;
+  if (MT.next < AC.currentTime) MT.next = AC.currentTime + 0.05; // npr. po pavzi zavihka
+  while (MT.next < AC.currentTime + 0.25) {
+    menuStep(MT.next, MT.step++);
+    MT.next += sixteenth;
+  }
+}
+
+function menuMusicStop() {
+  if (!MT.bus || !AC) return;
+  const bus = MT.bus;
+  MT.bus = null;
+  bus.gain.cancelScheduledValues(AC.currentTime);
+  bus.gain.setValueAtTime(bus.gain.value, AC.currentTime);
+  bus.gain.linearRampToValueAtTime(0.0001, AC.currentTime + 0.4);
+  setTimeout(() => bus.disconnect(), 700);
 }
 
 // ---------------------------------------------------------------- nagradna igra: ime in lestvica
@@ -1984,6 +2084,9 @@ function render() {
   frame++;
   uiButtons = [];
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+  if (MENU_STATES.includes(state)) menuMusicTick();
+  else menuMusicStop();
 
   let t = 0;
   if (state === 'play') { t = songTime(); frameUpdate(t); }
